@@ -5,17 +5,17 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 import sqlite3
 import random
 
-# ========== CONFIGURATION ==========
-TOKEN = "8788496160:AAGL-BLICNOhi2bCjdSvMQi-Rvix7HxLz0M"  # Your bot token
-ADMIN_IDS = [8518408753]  # Your chat ID - Admin
+# ========== تنظیمات ==========
+TOKEN = "8788496160:AAGL-BLICNOhi2bCjdSvMQi-Rvix7HxLz0M"  # ستاسو توکن
+ADMIN_IDS = [8518408753]  # ستاسو چت آیدی
 
-# Force Subscribe Channels (users must join both to use bot)
+# دوه چینلونه (کاروونکي باید دلته ګډون وکړي)
 REQUIRED_CHANNELS = [
     {"username": "@WahidModeX", "url": "https://t.me/WahidModeX"},
     {"username": "@ProTech43", "url": "https://t.me/ProTech43"}
 ]
 
-# Bot settings
+# د بوټ تنظیمات
 BOT_NAME = "Afg Plus Pay"
 MIN_WITHDRAWAL = 10.00
 WITHDRAWAL_FEE = 0.50
@@ -24,11 +24,10 @@ MAX_ADS_PER_DAY = 10
 REFERRAL_BONUS = 0.50
 # ====================================
 
-# Database setup
+# ډیټابیس
 conn = sqlite3.connect('afg_plus_pay.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Users table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -44,7 +43,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 ''')
 
-# Invites table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS invites (
     user_id INTEGER PRIMARY KEY,
@@ -54,7 +52,6 @@ CREATE TABLE IF NOT EXISTS invites (
 )
 ''')
 
-# Withdrawals table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS withdrawals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +63,6 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 )
 ''')
 
-# Ad watches log
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS ad_watches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +74,7 @@ CREATE TABLE IF NOT EXISTS ad_watches (
 
 conn.commit()
 
-# ========== DATABASE FUNCTIONS ==========
+# ========== د ډیټابیس دندې ==========
 def get_user(user_id):
     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
     return cursor.fetchone()
@@ -90,7 +86,6 @@ def create_user(user_id, username, first_name, invited_by=0):
         VALUES (?, ?, ?, ?, ?)
     ''', (user_id, username, first_name, today, invited_by))
     
-    # Give referral bonus
     if invited_by > 0 and invited_by != user_id:
         cursor.execute('SELECT balance FROM users WHERE user_id = ?', (invited_by,))
         inviter = cursor.fetchone()
@@ -106,13 +101,7 @@ def create_user(user_id, username, first_name, invited_by=0):
     
     conn.commit()
 
-def reset_daily_watch():
-    today = str(date.today())
-    cursor.execute('UPDATE users SET today_watched = 0 WHERE last_watch_date != ?', (today,))
-    cursor.execute('UPDATE users SET last_watch_date = ? WHERE last_watch_date IS NULL', (today,))
-    conn.commit()
-
-# ========== FORCE SUBSCRIBE CHECK ==========
+# ========== د چینل ګډون چک ==========
 async def check_subscription(user_id, context):
     not_joined = []
     for channel in REQUIRED_CHANNELS:
@@ -124,82 +113,12 @@ async def check_subscription(user_id, context):
             not_joined.append(channel)
     return not_joined
 
-async def force_subscribe_message(update, context, not_joined):
-    keyboard = []
-    for channel in not_joined:
-        keyboard.append([InlineKeyboardButton(f"📢 Join {channel['username']}", url=channel['url'])])
-    
-    keyboard.append([InlineKeyboardButton("✅ I've Joined", callback_data='check_subscription')])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    message_text = f"""
-⚠️ *Join Required!* ⚠️
-
-Please join the following channels to use *{BOT_NAME}*:
-
-"""
-    for channel in not_joined:
-        message_text += f"• {channel['username']}\n"
-    
-    message_text += "\nAfter joining, click the '✅ I've Joined' button to continue."
-    
-    if isinstance(update, Update) and update.callback_query:
-        await update.callback_query.edit_message_text(message_text, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-# ========== MAIN MENU ==========
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id, user_data):
-    today_watched = user_data[5] if user_data else 0
-    
-    keyboard = [
-        [InlineKeyboardButton("🎬 Watch Ad (+$0.20)", callback_data='watch_ad')],
-        [InlineKeyboardButton("💰 My Balance", callback_data='balance')],
-        [InlineKeyboardButton("👥 Invite Friends", callback_data='invite')],
-        [InlineKeyboardButton("📤 Withdraw", callback_data='withdraw')],
-        [InlineKeyboardButton("📊 Statistics", callback_data='stats')],
-    ]
-    
-    if user_id in ADMIN_IDS:
-        keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data='admin')])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    welcome_text = f"""
-💰 *{BOT_NAME}* 💰
-
-Welcome back *{user_data[1] or 'User'}*! 🤝
-
-🎬 *How to Earn:*
-• Each ad: *+${EARN_PER_AD}*
-• Daily limit: *{MAX_ADS_PER_DAY} ads*
-• Referral bonus: *+${REFERRAL_BONUS}*
-
-📊 *Today's Stats:*
-• Watched today: *{today_watched}/{MAX_ADS_PER_DAY}*
-• Current balance: *${user_data[2]:.2f}*
-
-💡 Press buttons below to earn money!
-"""
-    
-    if isinstance(update, Update) and update.callback_query:
-        await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-# ========== COMMAND HANDLERS ==========
+# ========== لومړی پیغام (د Open App تڼۍ سره) ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
     
-    # Check subscription
-    not_joined = await check_subscription(user.id, context)
-    if not_joined:
-        await force_subscribe_message(update, context, not_joined)
-        return
-    
-    # Check referral code
+    # د ریفرل چک
     invited_by = 0
     if args and args[0].startswith('ref_'):
         try:
@@ -210,11 +129,110 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     create_user(user.id, user.username, user.first_name, invited_by)
-    reset_daily_watch()
     
-    user_data = get_user(user.id)
-    await main_menu(update, context, user.id, user_data)
+    # د Open App تڼۍ سره کیبورډ
+    keyboard = [
+        [InlineKeyboardButton("🚀 Open App", callback_data='open_app')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome_text = f"""
+💰 *{BOT_NAME}* 💰
 
+Welcome *{user.first_name}!* 🤝
+
+Click the button below to open the app and start earning money!
+
+🎬 *Earn $0.20 per ad*
+👥 *Get $0.50 per referral*
+📊 *Watch 10 ads daily*
+
+👇 *Tap Open App to continue* 👇
+"""
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+# ========== د بشپړې پاڼې ښودل (لکه تصویر کې) ==========
+async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    # د چینل ګډون چک
+    not_joined = await check_subscription(user_id, context)
+    if not_joined:
+        keyboard = []
+        for channel in not_joined:
+            keyboard.append([InlineKeyboardButton(f"📢 Join {channel['username']}", url=channel['url'])])
+        keyboard.append([InlineKeyboardButton("✅ I've Joined", callback_data='check_sub')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "⚠️ *Please join our channels first!* ⚠️\n\nAfter joining, click the button below.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        return
+    
+    user_data = get_user(user_id)
+    if not user_data:
+        create_user(user_id, query.from_user.username, query.from_user.first_name)
+        user_data = get_user(user_id)
+    
+    balance = user_data[2] if user_data else 0
+    total_watched = user_data[3] if user_data else 0
+    total_earned = user_data[4] if user_data else 0
+    today_watched = user_data[5] if user_data else 0
+    
+    # د بشپړې پاڼې کیبورډ (لکه تصویر کې)
+    keyboard = [
+        [InlineKeyboardButton("🎬 Watch Ad", callback_data='watch_ad')],
+        [InlineKeyboardButton("💰 My Balance", callback_data='balance')],
+        [InlineKeyboardButton("👥 Invite Friends", callback_data='invite')],
+        [InlineKeyboardButton("📤 Withdraw", callback_data='withdraw')],
+        [InlineKeyboardButton("📊 Statistics", callback_data='stats')],
+        [InlineKeyboardButton("🌐 Language", callback_data='language')],
+        [InlineKeyboardButton("🛎️ Customer Support", callback_data='support')],
+    ]
+    
+    if user_id in ADMIN_IDS:
+        keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data='admin')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # د تصویر سره سم متن
+    main_text = f"""
+💰 *{BOT_NAME} - Earning* 💰
+
+📊 *TOTALS*
+• *TOTAL BALANCE*  
+  *${balance:.2f}*  
+  Available to withdraw
+
+---
+
+🎬 *Ads & Earn*
+Complete and watch a short video ads and earn *${EARN_PER_AD}*
+
+---
+
+🎥 *Watch Ad*
+Complete video to earn instantly
++${EARN_PER_AD}
+{today_watched} / {MAX_ADS_PER_DAY} today
+
+---
+
+✅ *Ready to earn*
+• *TOTAL WATCHED*  
+  {total_watched} ads
+• *TOTAL EARNED*  
+  *${total_earned:.2f}*
+"""
+    
+    await query.edit_message_text(main_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+# ========== د ګډون چک کال بیک ==========
 async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -223,24 +241,29 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     not_joined = await check_subscription(user_id, context)
     
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        keyboard = []
+        for channel in not_joined:
+            keyboard.append([InlineKeyboardButton(f"📢 Join {channel['username']}", url=channel['url'])])
+        keyboard.append([InlineKeyboardButton("✅ I've Joined", callback_data='check_sub')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "⚠️ *Please join our channels first!* ⚠️\n\nAfter joining, click the button below.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
     else:
-        user_data = get_user(user_id)
-        if not user_data:
-            create_user(user_id, query.from_user.username, query.from_user.first_name)
-            user_data = get_user(user_id)
-        await main_menu(update, context, user_id, user_data)
+        await open_app(update, context)
 
+# ========== د اعلان لیدل ==========
 async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎬 Ad is loading...")
     
     user_id = query.from_user.id
     
-    # Check subscription first
     not_joined = await check_subscription(user_id, context)
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        await open_app(update, context)
         return
     
     user_data = get_user(user_id)
@@ -268,7 +291,7 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Simulate ad watching
+    # د اعلان لیدل
     ad_message = await query.edit_message_text(
         "🎬 *Watching Ad...*\n\n"
         "⏳ Please wait 3 seconds\n"
@@ -278,7 +301,7 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await asyncio.sleep(3)
     
-    # Add earnings
+    # پیسې اضافه کول
     new_balance = user_data[2] + EARN_PER_AD
     new_total_watched = user_data[3] + 1
     new_total_earned = user_data[4] + EARN_PER_AD
@@ -298,20 +321,19 @@ async def watch_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    (user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), EARN_PER_AD))
     conn.commit()
     
-    keyboard = [[InlineKeyboardButton("🎬 Watch Another Ad", callback_data='watch_ad')],
-                [InlineKeyboardButton("💰 Check Balance", callback_data='balance')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await ad_message.edit_text(
-        f"✅ *Ad Completed Successfully!*\n\n"
+        f"✅ *Ad Completed!*\n\n"
         f"🎉 You earned: *+${EARN_PER_AD}*\n"
         f"💰 New Balance: *${new_balance:.2f}*\n"
         f"📊 Today: {new_today_watched}/{MAX_ADS_PER_DAY} ads\n\n"
-        f"Watch another ad to earn more! 🚀",
-        reply_markup=reply_markup,
+        f"🔙 Click back to continue earning!",
         parse_mode='Markdown'
     )
+    
+    await asyncio.sleep(2)
+    await open_app(update, context)
 
+# ========== بیلانس ښودل ==========
 async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -320,7 +342,7 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     not_joined = await check_subscription(user_id, context)
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        await open_app(update, context)
         return
     
     user_data = get_user(user_id)
@@ -333,8 +355,7 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_invites = invite_data[0] if invite_data else 0
     bonus_earned = invite_data[1] if invite_data else 0
     
-    keyboard = [[InlineKeyboardButton("🎬 Watch Ad", callback_data='watch_ad')],
-                [InlineKeyboardButton("📤 Withdraw", callback_data='withdraw')]]
+    keyboard = [[InlineKeyboardButton("🔙 Back to App", callback_data='open_app')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
@@ -350,6 +371,7 @@ async def show_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+# ========== ملګري رابلل ==========
 async def invite_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -358,7 +380,7 @@ async def invite_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     not_joined = await check_subscription(user_id, context)
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        await open_app(update, context)
         return
     
     bot_username = (await context.bot.get_me()).username
@@ -371,7 +393,8 @@ async def invite_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_invites = invite_data[0] if invite_data else 0
     bonus_earned = invite_data[1] if invite_data else 0
     
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_main')]]
+    keyboard = [[InlineKeyboardButton("🔙 Back to App", callback_data='open_app')],
+                [InlineKeyboardButton("📋 Copy Link", callback_data=f'copy_{invite_code}')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
@@ -382,12 +405,12 @@ async def invite_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 *Your Stats*\n"
         f"• Invited: {total_invites}\n"
         f"• Bonus Earned: `${bonus_earned:.2f}`\n\n"
-        f"💡 Share this link with your friends!\n"
-        f"Everyone who joins gets `${EARN_PER_AD}` per ad!",
+        f"💡 Share this link with your friends!",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
+# ========== پیسې ایستل ==========
 async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -396,7 +419,7 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     not_joined = await check_subscription(user_id, context)
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        await open_app(update, context)
         return
     
     user_data = get_user(user_id)
@@ -422,7 +445,6 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute('UPDATE users SET balance = 0 WHERE user_id = ?', (user_id,))
     conn.commit()
     
-    # Notify admin
     for admin_id in ADMIN_IDS:
         try:
             await context.bot.send_message(
@@ -430,12 +452,14 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆕 *New Withdrawal Request*\n\n"
                 f"👤 User: @{query.from_user.username or 'N/A'}\n"
                 f"💰 Amount: `${amount:.2f}`\n"
-                f"🆔 ID: #{withdrawal_id}\n"
-                f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                f"🆔 ID: #{withdrawal_id}",
                 parse_mode='Markdown'
             )
         except:
             pass
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to App", callback_data='open_app')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
         f"✅ *Withdrawal Request Submitted!*\n\n"
@@ -443,9 +467,11 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 Request ID: #{withdrawal_id}\n\n"
         f"⏳ Your request will be processed within 24-48 hours.\n"
         f"Thank you for using *{BOT_NAME}!* 🙏",
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
+# ========== احصایه ==========
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -454,7 +480,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     not_joined = await check_subscription(user_id, context)
     if not_joined:
-        await force_subscribe_message(update, context, not_joined)
+        await open_app(update, context)
         return
     
     user_data = get_user(user_id)
@@ -462,17 +488,15 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_users = cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0]
     total_ads = cursor.execute('SELECT SUM(total_watched) FROM users').fetchone()[0] or 0
     total_paid = cursor.execute('SELECT SUM(total_earned) FROM users').fetchone()[0] or 0
-    pending_withdrawals = cursor.execute('SELECT COUNT(*) FROM withdrawals WHERE status = "pending"').fetchone()[0]
     
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_main')]]
+    keyboard = [[InlineKeyboardButton("🔙 Back to App", callback_data='open_app')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
         f"📊 *Global Statistics*\n\n"
         f"👥 Total Users: {total_users}\n"
         f"🎬 Total Ads Watched: {total_ads}\n"
-        f"💰 Total Paid Out: `${total_paid:.2f}`\n"
-        f"⏳ Pending Withdrawals: {pending_withdrawals}\n\n"
+        f"💰 Total Paid Out: `${total_paid:.2f}`\n\n"
         f"📈 *Your Stats*\n"
         f"• Ads Watched: {user_data[3]}\n"
         f"• Total Earned: `${user_data[4]:.2f}`",
@@ -480,6 +504,48 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+# ========== ژبه ==========
+async def language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("🇺🇸 English", callback_data='lang_en')],
+        [InlineKeyboardButton("🇵🇰 پښتو", callback_data='lang_ps')],
+        [InlineKeyboardButton("🇦🇫 دری", callback_data='lang_dr')],
+        [InlineKeyboardButton("🔙 Back", callback_data='open_app')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "🌐 *Select Language / ژبه غوره کړئ*\n\n"
+        "Choose your preferred language:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+# ========== ملاتړ ==========
+async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to App", callback_data='open_app')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"🛎️ *Customer Support*\n\n"
+        f"📧 Email: support@afgpluspay.com\n"
+        f"📱 Telegram: @Kingwahidafg\n\n"
+        f"⏳ Response time: 24 hours\n\n"
+        f"*Common Issues:*\n"
+        f"• Withdrawal takes 24-48 hours\n"
+        f"• Daily reset at 00:00 UTC\n"
+        f"• Minimum withdrawal: ${MIN_WITHDRAWAL}",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+# ========== اډمین پینل ==========
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -500,14 +566,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     pending_text = ""
     for p in pending:
-        pending_text += f"• User: `{p[0]}` | Amount: `${p[1]:.2f}` | Date: {p[2]}\n"
+        pending_text += f"• User: `{p[0]}` | Amount: `${p[1]:.2f}`\n"
     
     if not pending_text:
         pending_text = "No pending withdrawals"
     
     keyboard = [
         [InlineKeyboardButton("📊 Refresh", callback_data='admin')],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data='back_to_main')]
+        [InlineKeyboardButton("🔙 Back to App", callback_data='open_app')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -518,45 +584,30 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎬 Total Ads: {total_ads}\n"
         f"💰 Total Paid: `${total_paid:.2f}`\n"
         f"⏳ Pending Withdrawals: {pending_withdrawals}\n\n"
-        f"📋 *Recent Withdrawals:*\n{pending_text}\n\n"
-        f"💡 To process withdrawals, check your database!",
+        f"📋 *Pending Withdrawals:*\n{pending_text}",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    user_data = get_user(user_id)
-    
-    if not user_data:
-        create_user(user_id, query.from_user.username, query.from_user.first_name)
-        user_data = get_user(user_id)
-    
-    await main_menu(update, context, user_id, user_data)
-
-# ========== MAIN FUNCTION ==========
+# ========== مین فنکشن ==========
 def main():
     app = Application.builder().token(TOKEN).build()
     
-    # Command handlers
     app.add_handler(CommandHandler("start", start))
-    
-    # Callback handlers
-    app.add_handler(CallbackQueryHandler(check_subscription_callback, pattern='check_subscription'))
+    app.add_handler(CallbackQueryHandler(open_app, pattern='open_app'))
+    app.add_handler(CallbackQueryHandler(check_subscription_callback, pattern='check_sub'))
     app.add_handler(CallbackQueryHandler(watch_ad, pattern='watch_ad'))
     app.add_handler(CallbackQueryHandler(show_balance, pattern='balance'))
     app.add_handler(CallbackQueryHandler(invite_friends, pattern='invite'))
     app.add_handler(CallbackQueryHandler(withdraw, pattern='withdraw'))
     app.add_handler(CallbackQueryHandler(show_stats, pattern='stats'))
+    app.add_handler(CallbackQueryHandler(language, pattern='language'))
+    app.add_handler(CallbackQueryHandler(support, pattern='support'))
     app.add_handler(CallbackQueryHandler(admin_panel, pattern='admin'))
-    app.add_handler(CallbackQueryHandler(back_to_main, pattern='back_to_main'))
     
     print(f"✅ {BOT_NAME} Bot is running!")
     print(f"👑 Admin ID: {ADMIN_IDS[0]}")
-    print(f"📢 Force Subscribe Channels: {[c['username'] for c in REQUIRED_CHANNELS]}")
+    print(f"📢 Channels: @WahidModeX and @ProTech43")
     
     app.run_polling()
 
