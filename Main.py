@@ -12,7 +12,7 @@ ADMIN_IDS = [8518408753]  # ستاسو چت آیدی
 # دوه چینلونه (کاروونکي باید دلته ګډون وکړي)
 REQUIRED_CHANNELS = [
     {"username": "@WahidModeX", "url": "https://t.me/WahidModeX"},
-    {"username": "@ProTech43", "url": "https://t.me/ProTech43"}
+    {"username": "@SQFORCEZONE", "url": "https://t.me/SQFORCEZONE"}
 ]
 
 # د بوټ تنظیمات
